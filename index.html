@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#101418" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎱</text></svg>" />
+  <title>Play Pool</title>
+</head>
+<body>
+  <div id="app">
+    <canvas id="canvas"></canvas>
+
+    <div id="hud" class="hidden">
+      <div id="p0" class="player">
+        <span class="pname">You</span>
+        <span class="pgroup"></span>
+        <span class="pballs"></span>
+      </div>
+      <div id="turnMsg"></div>
+      <div id="p1" class="player">
+        <span class="pballs"></span>
+        <span class="pgroup"></span>
+        <span class="pname">Computer</span>
+      </div>
+    </div>
+
+    <div id="toast" class="hidden"></div>
+
+    <div id="powerWrap" class="hidden">
+      <div id="powerTrack"><div id="powerFill"></div></div>
+      <div id="powerLabel">POWER</div>
+    </div>
+
+    <div id="spinWidget" class="hidden">
+      <div id="spinBall"><div id="spinDot"></div></div>
+      <div id="spinLabel">SPIN</div>
+    </div>
+
+    <button id="btnMenu" class="hidden" title="Main menu">☰</button>
+
+    <div id="menu" class="overlay">
+      <h1>Play Pool</h1>
+      <p class="tag">Classic billiards against the computer</p>
+      <div class="modes">
+        <button class="mode selected" data-mode="8ball"><b>8-Ball</b><span>Solids vs stripes</span></button>
+        <button class="mode disabled" disabled><b>9-Ball</b><span>Coming soon</span></button>
+        <button class="mode disabled" disabled><b>Straight Pool</b><span>Coming soon</span></button>
+      </div>
+      <div class="diff">
+        <button data-d="easy">Easy</button>
+        <button data-d="medium" class="selected">Medium</button>
+        <button data-d="hard">Hard</button>
+      </div>
+      <button id="btnPlay">PLAY</button>
+      <p class="hint">Aim: tap or drag on the table &nbsp;·&nbsp; Shoot: pull the power bar down and release</p>
+    </div>
+
+    <div id="result" class="overlay hidden">
+      <h1 id="resTitle"></h1>
+      <p id="resReason"></p>
+      <div id="resStats"></div>
+      <p class="note">Signing in with Google to save your progress arrives in a later update.</p>
+      <div class="row">
+        <button id="btnAgain">Play again</button>
+        <button id="btnToMenu">Main menu</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
