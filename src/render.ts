@@ -7,13 +7,18 @@ import { rayHit } from './physics';
 import { norm, scale, sub, add, v } from './math';
 import type { App } from './game';
 
+/**
+ * Draws the world. In portrait windows (phones) the table is rotated 90°
+ * so it fills the screen; w2s/s2w hide the rotation from the input code.
+ */
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private cw = 0;
   private ch = 0;
-  scale = 1;
-  private ox = 0;
-  private oy = 0;
+  rotated = false;
+  s = 1; // world meters -> css px
+  private tx = 0;
+  private ty = 0;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -29,70 +34,91 @@ export class Renderer {
     this.canvas.height = Math.round(this.ch * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const mx = 24;
-    const myTop = 60;
-    const myBot = 84;
-    const availW = this.cw - 2 * mx;
-    const availH = this.ch - myTop - myBot;
-    this.scale = Math.min(
-      availW / (TABLE_W + 2 * RAIL_W),
-      availH / (TABLE_H + 2 * RAIL_W)
-    );
-    this.ox = (this.cw - TABLE_W * this.scale) / 2;
-    this.oy = myTop + (availH - TABLE_H * this.scale) / 2;
+    this.rotated = this.ch > this.cw;
+    const wExt = (this.rotated ? TABLE_H : TABLE_W) + 2 * RAIL_W;
+    const hExt = (this.rotated ? TABLE_W : TABLE_H) + 2 * RAIL_W;
+    // margins leave room for the HUD (top) and the power/spin controls
+    const mL = this.rotated ? 10 : 20;
+    const mR = this.rotated ? 62 : 66;
+    const mT = this.rotated ? 56 : 60;
+    const mB = this.rotated ? 120 : 88;
+
+    this.s = Math.min((this.cw - mL - mR) / wExt, (this.ch - mT - mB) / hExt);
+    const tw = (this.rotated ? TABLE_H : TABLE_W) * this.s;
+    const th = (this.rotated ? TABLE_W : TABLE_H) * this.s;
+    const lx = mL + (this.cw - mL - mR - tw) / 2;
+    const tyE = mT + (this.ch - mT - mB - th) / 2;
+    if (this.rotated) {
+      this.tx = lx + TABLE_H * this.s;
+      this.ty = tyE;
+    } else {
+      this.tx = lx;
+      this.ty = tyE;
+    }
   }
 
   w2s(p: Vec): Vec {
-    return v(this.ox + p.x * this.scale, this.oy + p.y * this.scale);
+    return this.rotated
+      ? v(this.tx - p.y * this.s, this.ty + p.x * this.s)
+      : v(this.tx + p.x * this.s, this.ty + p.y * this.s);
   }
 
-  s2w(p: Vec): Vec {
-    return v((p.x - this.ox) / this.scale, (p.y - this.oy) / this.scale);
+  s2w(q: Vec): Vec {
+    return this.rotated
+      ? v((q.y - this.ty) / this.s, (this.tx - q.x) / this.s)
+      : v((q.x - this.tx) / this.s, (q.y - this.ty) / this.s);
+  }
+
+  /** world -> local table coords (used inside the rotated canvas transform) */
+  private lp(p: Vec): Vec {
+    return v(p.x * this.s, p.y * this.s);
   }
 
   render(app: App): void {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.cw, this.ch);
-    this.drawTable(app);
-    if (app.screen === 'menu') return;
 
-    const game = app.game;
+    ctx.save();
+    ctx.translate(this.tx, this.ty);
+    if (this.rotated) ctx.rotate(Math.PI / 2);
 
-    // kitchen highlight during ball-in-hand-behind-the-line
-    if (game.ballInHand === 'kitchen' && game.current === 0 && !app.simRunning) {
-      const a = this.w2s(v(0, 0));
-      const b = this.w2s(v(HEAD_X, TABLE_H));
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
-      ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
+    this.drawTable();
+    if (app.screen !== 'menu') {
+      const game = app.game;
+
+      if (game.ballInHand === 'kitchen' && game.current === 0 && !app.simRunning) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+        ctx.fillRect(0, 0, HEAD_X * this.s, TABLE_H * this.s);
+      }
+
+      for (const b of game.balls) {
+        if (b.inPlay) this.drawBall(b);
+      }
+
+      const showAim =
+        !app.simRunning && game.winner === null &&
+        (app.canHumanAim() || app.aiAiming);
+
+      if (showAim) {
+        if (app.canHumanAim()) this.drawGuide(app);
+        this.drawCueStick(app);
+      }
+
+      if (game.ballInHand !== 'none' && game.current === 0 && !app.simRunning) {
+        this.drawBallInHandRing(game.cue.pos);
+      }
     }
-
-    for (const b of game.balls) {
-      if (b.inPlay) this.drawBall(b);
-    }
-
-    const showAim =
-      !app.simRunning && game.winner === null &&
-      (app.canHumanAim() || app.aiAiming);
-
-    if (showAim) {
-      if (app.canHumanAim()) this.drawGuide(app);
-      this.drawCueStick(app);
-    }
-
-    if (game.ballInHand !== 'none' && game.current === 0 && !app.simRunning) {
-      this.drawBallInHandRing(game.cue.pos);
-    }
+    ctx.restore();
   }
 
-  private drawTable(app: App): void {
+  private drawTable(): void {
     const ctx = this.ctx;
-    const s = this.scale;
-    const tl = this.w2s(v(0, 0));
+    const s = this.s;
+    const rw = RAIL_W * s;
 
     // wooden rail
-    const rw = RAIL_W * s;
-    roundRect(ctx, tl.x - rw, tl.y - rw, TABLE_W * s + 2 * rw, TABLE_H * s + 2 * rw, rw * 0.55);
-    const wood = ctx.createLinearGradient(0, tl.y - rw, 0, tl.y + TABLE_H * s + rw);
+    roundRect(ctx, -rw, -rw, TABLE_W * s + 2 * rw, TABLE_H * s + 2 * rw, rw * 0.55);
+    const wood = ctx.createLinearGradient(0, -rw, 0, TABLE_H * s + rw);
     wood.addColorStop(0, '#7c4a22');
     wood.addColorStop(0.5, '#5f3617');
     wood.addColorStop(1, '#7c4a22');
@@ -104,29 +130,27 @@ export class Renderer {
 
     // cloth
     ctx.fillStyle = '#1e7b4d';
-    ctx.fillRect(tl.x, tl.y, TABLE_W * s, TABLE_H * s);
-    // subtle vignette
+    ctx.fillRect(0, 0, TABLE_W * s, TABLE_H * s);
     const vg = ctx.createRadialGradient(
-      tl.x + TABLE_W * s / 2, tl.y + TABLE_H * s / 2, TABLE_H * s * 0.3,
-      tl.x + TABLE_W * s / 2, tl.y + TABLE_H * s / 2, TABLE_W * s * 0.7
+      TABLE_W * s / 2, TABLE_H * s / 2, TABLE_H * s * 0.3,
+      TABLE_W * s / 2, TABLE_H * s / 2, TABLE_W * s * 0.7
     );
     vg.addColorStop(0, 'rgba(0,0,0,0)');
     vg.addColorStop(1, 'rgba(0,0,0,0.25)');
     ctx.fillStyle = vg;
-    ctx.fillRect(tl.x, tl.y, TABLE_W * s, TABLE_H * s);
+    ctx.fillRect(0, 0, TABLE_W * s, TABLE_H * s);
 
     // head string
-    const hs = this.w2s(v(HEAD_X, 0));
     ctx.strokeStyle = 'rgba(255,255,255,0.12)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(hs.x, tl.y);
-    ctx.lineTo(hs.x, tl.y + TABLE_H * s);
+    ctx.moveTo(HEAD_X * s, 0);
+    ctx.lineTo(HEAD_X * s, TABLE_H * s);
     ctx.stroke();
 
     // pockets
     for (const pk of POCKETS) {
-      const p = this.w2s(pk.pos);
+      const p = this.lp(pk.pos);
       ctx.beginPath();
       ctx.arc(p.x, p.y, pk.r * s, 0, Math.PI * 2);
       const pg = ctx.createRadialGradient(p.x, p.y, pk.r * s * 0.2, p.x, p.y, pk.r * s);
@@ -135,13 +159,12 @@ export class Renderer {
       ctx.fillStyle = pg;
       ctx.fill();
     }
-    void app;
   }
 
   private drawBall(b: Ball): void {
     const ctx = this.ctx;
-    const p = this.w2s(b.pos);
-    const r = BALL_R * this.scale;
+    const p = this.lp(b.pos);
+    const r = BALL_R * this.s;
     const color = BALL_COLORS[b.id];
     const isStripe = b.id >= 9;
 
@@ -167,18 +190,22 @@ export class Renderer {
       ctx.restore();
     }
 
-    // number circle
+    // number circle (kept upright even when the table is rotated)
     if (b.id > 0) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, r * 0.52, 0, Math.PI * 2);
       ctx.fillStyle = '#f4f0e4';
       ctx.fill();
-      if (r > 7) {
+      if (r > 6.5) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        if (this.rotated) ctx.rotate(-Math.PI / 2);
         ctx.fillStyle = '#222';
         ctx.font = `bold ${Math.max(7, r * 0.62)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(b.id), p.x, p.y + r * 0.04);
+        ctx.fillText(String(b.id), 0, r * 0.04);
+        ctx.restore();
       }
     }
 
@@ -204,8 +231,8 @@ export class Renderer {
     const hit = rayHit(cue.pos, dir, game.balls, 0);
     const hitPoint = add(cue.pos, scale(dir, hit.t));
 
-    const a = this.w2s(cue.pos);
-    const b = this.w2s(hitPoint);
+    const a = this.lp(cue.pos);
+    const b = this.lp(hitPoint);
     ctx.save();
     ctx.setLineDash([6, 7]);
     ctx.strokeStyle = 'rgba(255,255,255,0.65)';
@@ -218,16 +245,15 @@ export class Renderer {
 
     // ghost ball at the point of contact
     ctx.beginPath();
-    ctx.arc(b.x, b.y, BALL_R * this.scale, 0, Math.PI * 2);
+    ctx.arc(b.x, b.y, BALL_R * this.s, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(255,255,255,0.75)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
     if (hit.ball) {
-      // object ball direction
       const obDir = norm(sub(hit.ball.pos, hitPoint));
-      const o1 = this.w2s(hit.ball.pos);
-      const o2 = this.w2s(add(hit.ball.pos, scale(obDir, 0.28)));
+      const o1 = this.lp(hit.ball.pos);
+      const o2 = this.lp(add(hit.ball.pos, scale(obDir, 0.28)));
       ctx.strokeStyle = 'rgba(255, 215, 94, 0.85)';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
@@ -246,9 +272,9 @@ export class Renderer {
     const tip = sub(cue.pos, scale(dir, pull));
     const butt = sub(cue.pos, scale(dir, pull + 1.35));
 
-    const a = this.w2s(tip);
-    const b = this.w2s(butt);
-    const lw = Math.max(3.5, BALL_R * this.scale * 0.55);
+    const a = this.lp(tip);
+    const b = this.lp(butt);
+    const lw = Math.max(3.5, BALL_R * this.s * 0.55);
 
     ctx.save();
     ctx.lineCap = 'round';
@@ -268,7 +294,7 @@ export class Renderer {
     ctx.lineWidth = lw;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
-    const t2 = this.w2s(sub(tip, scale(dir, -0.02)));
+    const t2 = this.lp(sub(tip, scale(dir, -0.02)));
     ctx.lineTo(t2.x, t2.y);
     ctx.stroke();
     ctx.restore();
@@ -276,8 +302,8 @@ export class Renderer {
 
   private drawBallInHandRing(pos: Vec): void {
     const ctx = this.ctx;
-    const p = this.w2s(pos);
-    const r = BALL_R * this.scale;
+    const p = this.lp(pos);
+    const r = BALL_R * this.s;
     const pulse = 1.4 + Math.sin(performance.now() / 260) * 0.18;
     ctx.beginPath();
     ctx.arc(p.x, p.y, r * pulse, 0, Math.PI * 2);

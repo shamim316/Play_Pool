@@ -15,6 +15,7 @@ export class App {
   aiAiming = false;
   events: ShotEvents = makeShotEvents();
   aim = { angle: Math.PI, power: 0, spinX: 0, spinY: 0 };
+  humanHasShot = false; // drives the "pull the power bar" first-shot coaching
   onShotFired: () => void = () => {};
 
   private accumulator = 0;
@@ -28,6 +29,7 @@ export class App {
     this.simRunning = false;
     this.aiAiming = false;
     this.aim = { angle: Math.PI, power: 0, spinX: 0, spinY: 0 };
+    this.humanHasShot = false;
     this.stats = { potted: [0, 0], fouls: [0, 0], shots: [0, 0] };
     this.screen = 'game';
     ui.showGame(this);
@@ -56,6 +58,7 @@ export class App {
   fire(shot: Shot): void {
     if (this.simRunning || this.game.winner !== null) return;
     const shooter = this.game.current;
+    if (shooter === 0) this.humanHasShot = true;
     this.stats.shots[shooter]++;
     this.game.beginShot();
     strike(this.game.cue, shot);

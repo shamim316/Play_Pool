@@ -92,6 +92,7 @@ export function updateHud(app: App): void {
     game.current === 0 && !app.simRunning && game.winner === null && !app.aiAiming;
   $('powerWrap').classList.toggle('disabled', !humanTurn);
   $('spinWidget').classList.toggle('disabled', !humanTurn);
+  $('powerTrack').classList.toggle('pulse', humanTurn && !app.humanHasShot);
 }
 
 export function setPowerFill(p: number): void {

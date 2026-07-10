@@ -8,12 +8,23 @@ import * as ui from './ui';
 export function setupInput(app: App, renderer: Renderer, canvas: HTMLCanvasElement): void {
   let draggingCue = false;
   let aiming = false;
+  let aimHinted = false;
 
   const toWorld = (e: PointerEvent) => renderer.s2w(v(e.clientX, e.clientY));
 
+  // setPointerCapture throws if the pointer was already released
+  // (interrupted touches, synthetic events) — capture is best-effort
+  const capture = (el: Element, e: PointerEvent) => {
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  };
+
   canvas.addEventListener('pointerdown', (e) => {
     if (!app.canHumanAim()) return;
-    canvas.setPointerCapture(e.pointerId);
+    capture(canvas, e);
     const p = toWorld(e);
     const game = app.game;
     if (game.ballInHand !== 'none' && dist(p, game.cue.pos) < BALL_R * 4) {
@@ -51,6 +62,10 @@ export function setupInput(app: App, renderer: Renderer, canvas: HTMLCanvasEleme
     const dy = p.y - cue.y;
     if (Math.hypot(dx, dy) < BALL_R * 0.5) return;
     app.aim.angle = Math.atan2(dy, dx);
+    if (!aimHinted && !app.humanHasShot) {
+      aimHinted = true;
+      ui.toast('Now pull the glowing POWER bar down and let go to shoot', 3500);
+    }
   }
 
   // ----- power slider -----
@@ -67,7 +82,7 @@ export function setupInput(app: App, renderer: Renderer, canvas: HTMLCanvasEleme
   track.addEventListener('pointerdown', (e) => {
     if (!app.canHumanAim()) return;
     powerActive = true;
-    track.setPointerCapture(e.pointerId);
+    capture(track, e);
     setPower(e);
   });
   track.addEventListener('pointermove', (e) => {
@@ -116,7 +131,7 @@ export function setupInput(app: App, renderer: Renderer, canvas: HTMLCanvasEleme
   spinBall.addEventListener('pointerdown', (e) => {
     if (!app.canHumanAim()) return;
     spinActive = true;
-    spinBall.setPointerCapture(e.pointerId);
+    capture(spinBall, e);
     setSpin(e);
   });
   spinBall.addEventListener('pointermove', (e) => {
