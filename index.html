@@ -38,6 +38,7 @@
     </div>
 
     <button id="btnMenu" class="hidden" title="Main menu">☰</button>
+    <button id="btnSound" class="hidden" title="Sound on/off">🔊</button>
 
     <div id="menu" class="overlay">
       <h1>Play Pool</h1>
@@ -53,6 +54,7 @@
         <button data-d="hard">Hard</button>
       </div>
       <button id="btnPlay">PLAY</button>
+      <p id="menuStats"></p>
       <p class="hint">Aim: tap or drag on the table &nbsp;·&nbsp; Shoot: pull the golden power bar all the way down, then let go</p>
     </div>
 
@@ -61,6 +63,10 @@
       <p id="resReason"></p>
       <div id="resStats"></div>
       <p class="note">Signing in with Google to save your progress arrives in a later update.</p>
+      <div id="resSuggest" class="hidden">
+        <span id="resSuggestText"></span>
+        <button id="btnSuggest"></button>
+      </div>
       <div class="row">
         <button id="btnAgain">Play again</button>
         <button id="btnToMenu">Main menu</button>

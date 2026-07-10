@@ -102,6 +102,25 @@ export class Renderer {
       if (showAim) {
         if (app.canHumanAim()) this.drawGuide(app);
         this.drawCueStick(app);
+      } else if (app.simRunning) {
+        // cue stick springs forward for a moment as the shot is struck
+        const dt = performance.now() - app.strikeAt;
+        if (dt < 120) this.drawCueStick(app, app.lastShotPower * (1 - dt / 120));
+      }
+
+      // balls shrinking into pockets
+      const now = performance.now();
+      for (const s of app.sinkAnims) {
+        const t = (now - s.start) / 350;
+        if (t >= 1) continue;
+        const p = this.lp(s.pos);
+        const r = BALL_R * this.s * (1 - t);
+        this.ctx.globalAlpha = 1 - t;
+        this.ctx.beginPath();
+        this.ctx.arc(p.x, p.y, Math.max(0.5, r), 0, Math.PI * 2);
+        this.ctx.fillStyle = BALL_COLORS[s.id];
+        this.ctx.fill();
+        this.ctx.globalAlpha = 1;
       }
 
       if (game.ballInHand !== 'none' && game.current === 0 && !app.simRunning) {
@@ -264,11 +283,11 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawCueStick(app: App): void {
+  private drawCueStick(app: App, powerOverride?: number): void {
     const ctx = this.ctx;
     const cue = app.game.cue;
     const dir = v(Math.cos(app.aim.angle), Math.sin(app.aim.angle));
-    const pull = 0.045 + app.aim.power * 0.16;
+    const pull = 0.045 + (powerOverride ?? app.aim.power) * 0.16;
     const tip = sub(cue.pos, scale(dir, pull));
     const butt = sub(cue.pos, scale(dir, pull + 1.35));
 

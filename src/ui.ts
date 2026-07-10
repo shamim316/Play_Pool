@@ -1,6 +1,7 @@
-import type { Group } from './types';
+import type { Difficulty, Group } from './types';
 import { BALL_COLORS } from './constants';
-import type { App } from './game';
+import { loadStats, totalWins } from './storage';
+import type { App, Suggestion } from './game';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -17,15 +18,27 @@ export function toast(text: string, ms = 2400): void {
 export function showMenu(): void {
   $('menu').classList.remove('hidden');
   $('result').classList.add('hidden');
-  for (const id of ['hud', 'powerWrap', 'spinWidget', 'btnMenu', 'toast']) {
+  for (const id of ['hud', 'powerWrap', 'spinWidget', 'btnMenu', 'btnSound', 'toast']) {
     $(id).classList.add('hidden');
   }
+  const s = loadStats();
+  $('menuStats').textContent =
+    s.games === 0
+      ? ''
+      : `Your record on this device: ${s.games} game${s.games === 1 ? '' : 's'} · ` +
+        `${totalWins(s)} won · best streak ${Math.max(0, s.bestStreak)}`;
+}
+
+export function syncDiffButtons(diff: Difficulty): void {
+  document.querySelectorAll<HTMLButtonElement>('.diff button').forEach((b) => {
+    b.classList.toggle('selected', b.dataset.d === diff);
+  });
 }
 
 export function showGame(app: App): void {
   $('menu').classList.add('hidden');
   $('result').classList.add('hidden');
-  for (const id of ['hud', 'powerWrap', 'spinWidget', 'btnMenu']) {
+  for (const id of ['hud', 'powerWrap', 'spinWidget', 'btnMenu', 'btnSound']) {
     $(id).classList.remove('hidden');
   }
   ($('p1').querySelector('.pname') as HTMLElement).textContent =
@@ -37,7 +50,8 @@ export function showResult(
   app: App,
   winner: 0 | 1,
   reason: string,
-  stats: { potted: number[]; fouls: number[]; shots: number[] }
+  stats: { potted: number[]; fouls: number[]; shots: number[] },
+  suggest: Suggestion | null = null
 ): void {
   $('result').classList.remove('hidden');
   $('resTitle').textContent = winner === 0 ? '🏆 You win!' : 'Computer wins';
@@ -46,6 +60,17 @@ export function showResult(
     `<div><b>${stats.shots[0]}</b>Your shots</div>` +
     `<div><b>${stats.potted[0]}</b>Balls potted</div>` +
     `<div><b>${stats.fouls[0]}</b>Fouls</div>`;
+
+  const box = $('resSuggest');
+  if (suggest) {
+    box.classList.remove('hidden');
+    $('resSuggestText').textContent = suggest.text;
+    const btn = $('btnSuggest') as HTMLButtonElement;
+    btn.textContent = `Play on ${suggest.diff[0].toUpperCase()}${suggest.diff.slice(1)}`;
+    btn.dataset.diff = suggest.diff;
+  } else {
+    box.classList.add('hidden');
+  }
   void app;
 }
 

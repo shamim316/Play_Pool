@@ -3,6 +3,7 @@ import type { Difficulty } from './types';
 import { App } from './game';
 import { Renderer } from './render';
 import { setupInput } from './input';
+import { audio } from './audio';
 import * as ui from './ui';
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -22,6 +23,27 @@ document.getElementById('btnPlay')!.addEventListener('click', () => app.startGam
 document.getElementById('btnAgain')!.addEventListener('click', () => app.startGame());
 document.getElementById('btnToMenu')!.addEventListener('click', () => app.toMenu());
 document.getElementById('btnMenu')!.addEventListener('click', () => app.toMenu());
+
+const btnSuggest = document.getElementById('btnSuggest') as HTMLButtonElement;
+btnSuggest.addEventListener('click', () => {
+  const d = btnSuggest.dataset.diff as Difficulty | undefined;
+  if (d) {
+    app.difficulty = d;
+    ui.syncDiffButtons(d);
+    app.startGame();
+  }
+});
+
+const btnSound = document.getElementById('btnSound')!;
+const syncSoundIcon = () => {
+  btnSound.textContent = audio.enabled ? '🔊' : '🔇';
+};
+btnSound.addEventListener('click', () => {
+  audio.toggle();
+  syncSoundIcon();
+});
+syncSoundIcon();
+window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
 
 ui.showMenu();
 

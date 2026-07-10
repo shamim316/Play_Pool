@@ -9,12 +9,13 @@ export interface AiParams {
   powerErr: number; // relative power error
   topChoices: number; // picks randomly among the N best shots
   breakErr: number;
+  position: boolean; // plan the cue ball's landing spot for the next shot
 }
 
 export const AI_LEVELS: Record<Difficulty, AiParams> = {
-  easy: { angleErr: 0.028, powerErr: 0.22, topChoices: 3, breakErr: 0.03 },
-  medium: { angleErr: 0.011, powerErr: 0.1, topChoices: 2, breakErr: 0.012 },
-  hard: { angleErr: 0.0035, powerErr: 0.04, topChoices: 1, breakErr: 0.005 },
+  easy: { angleErr: 0.028, powerErr: 0.22, topChoices: 3, breakErr: 0.03, position: false },
+  medium: { angleErr: 0.011, powerErr: 0.1, topChoices: 2, breakErr: 0.012, position: false },
+  hard: { angleErr: 0.0035, powerErr: 0.04, topChoices: 1, breakErr: 0.005, position: true },
 };
 
 interface Candidate {
@@ -31,8 +32,22 @@ function segmentClear(a: Vec, b: Vec, balls: Ball[], exclude: number[]): boolean
   return true;
 }
 
+/** Is there a geometrically open pot on `ballPos` from `from`? (obstructions ignored) */
+function potAngleOk(from: Vec, ballPos: Vec, minCos: number): boolean {
+  for (const pk of POCKETS) {
+    const toP = sub(pk.pos, ballPos);
+    const dBP = Math.hypot(toP.x, toP.y);
+    if (dBP < 1e-4) continue;
+    const dirBP = scale(toP, 1 / dBP);
+    const ghost = sub(ballPos, scale(dirBP, 2 * BALL_R));
+    const c = dot(norm(sub(ghost, from)), dirBP);
+    if (c > minCos) return true;
+  }
+  return false;
+}
+
 /** All pottable (target ball, pocket) pairs from a given cue position. */
-function candidates(game: EightBall, cuePos: Vec): Candidate[] {
+function candidates(game: EightBall, cuePos: Vec, position = false): Candidate[] {
   const out: Candidate[] = [];
   const targets = game.legalTargets(game.current);
   for (const id of targets) {
@@ -53,13 +68,37 @@ function candidates(game: EightBall, cuePos: Vec): Candidate[] {
       if (!segmentClear(cuePos, ghost, game.balls, [0, t.id])) continue;
       if (!segmentClear(t.pos, pk.pos, game.balls, [0, t.id])) continue;
 
+      const power = clamp(0.25 + 0.18 * dCG + 0.3 * (dBP / Math.max(cosCut, 0.35)), 0.22, 1);
       let score = Math.pow(cosCut, 3) / (1 + 0.6 * dCG) / (1 + 1.0 * dBP);
       if (!pk.corner) score *= Math.abs(dirBP.y); // side pockets want a square approach
-      out.push({
-        angle: Math.atan2(dirCG.y, dirCG.x),
-        power: clamp(0.25 + 0.18 * dCG + 0.3 * (dBP / Math.max(cosCut, 0.35)), 0.22, 1),
-        score,
-      });
+
+      if (position) {
+        // rough cue-ball landing spot: it leaves along the tangent line,
+        // carrying more speed the thinner the cut
+        const sin2 = Math.max(0, 1 - cosCut * cosCut);
+        const tangent = norm(sub(dirCG, scale(dirBP, cosCut)));
+        const rest = {
+          x: clamp(ghost.x + tangent.x * (0.1 + 0.8 * sin2 * power), BALL_R, TABLE_W - BALL_R),
+          y: clamp(ghost.y + tangent.y * (0.1 + 0.8 * sin2 * power), BALL_R, TABLE_H - BALL_R),
+        };
+        // avoid following the object ball into a pocket
+        for (const pk2 of POCKETS) {
+          if (segPointDist(ghost, rest, pk2.pos) < pk2.r * 1.25) {
+            score *= 0.2;
+            break;
+          }
+        }
+        // prefer shots that leave an open next ball
+        let nextIds = targets.filter((nid) => nid !== t.id);
+        if (nextIds.length === 0 && t.id !== 8) nextIds = [8];
+        const hasNext = nextIds.some((nid) => {
+          const nb = game.balls[nid];
+          return nb && nb.inPlay && potAngleOk(rest, nb.pos, 0.45);
+        });
+        if (hasNext) score *= 1.6;
+      }
+
+      out.push({ angle: Math.atan2(dirCG.y, dirCG.x), power, score });
     }
   }
   return out.sort((a, b) => b.score - a.score);
@@ -81,7 +120,7 @@ export function chooseShot(game: EightBall, params: AiParams): Shot {
     };
   }
 
-  const cands = candidates(game, cuePos);
+  const cands = candidates(game, cuePos, params.position);
   if (cands.length > 0) {
     const n = Math.min(params.topChoices, cands.length);
     const pick = cands[Math.floor(Math.random() * n)];

@@ -1,9 +1,25 @@
-import type { Difficulty, Shot, ShotEvents } from './types';
+import type { Difficulty, Shot, ShotEvents, Vec } from './types';
 import { PHYSICS_DT } from './constants';
 import { EightBall } from './eightball';
 import { AI_LEVELS, chooseShot, chooseCuePlacement } from './ai';
-import { makeShotEvents, stepPhysics, strike, stopAll } from './physics';
+import { makeShotEvents, stepPhysics, strike, stopAll, hooks } from './physics';
+import { recordGame } from './storage';
+import { audio } from './audio';
 import * as ui from './ui';
+
+export interface SinkAnim {
+  id: number;
+  pos: Vec;
+  start: number;
+}
+
+export interface Suggestion {
+  diff: Difficulty;
+  text: string;
+}
+
+const DIFF_ORDER: Difficulty[] = ['easy', 'medium', 'hard'];
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 export type Screen = 'menu' | 'game' | 'result';
 
@@ -16,12 +32,26 @@ export class App {
   events: ShotEvents = makeShotEvents();
   aim = { angle: Math.PI, power: 0, spinX: 0, spinY: 0 };
   humanHasShot = false; // drives the "pull the power bar" first-shot coaching
+  sinkAnims: SinkAnim[] = [];
+  strikeAt = 0;
+  lastShotPower = 0;
   onShotFired: () => void = () => {};
 
   private accumulator = 0;
   private humanBreaks = true;
   private timers: number[] = [];
   private stats = { potted: [0, 0], fouls: [0, 0], shots: [0, 0] };
+
+  constructor() {
+    hooks.impact = (kind, speed) => {
+      if (kind === 'ball') audio.ballClick(speed / 8);
+      else audio.rail(speed / 8);
+    };
+    hooks.pot = (ball, pocket) => {
+      audio.pocket();
+      this.sinkAnims.push({ id: ball.id, pos: { ...pocket }, start: performance.now() });
+    };
+  }
 
   startGame(): void {
     this.clearTimers();
@@ -42,6 +72,7 @@ export class App {
     this.screen = 'menu';
     this.simRunning = false;
     ui.showMenu();
+    ui.syncDiffButtons(this.difficulty);
   }
 
   canHumanAim(): boolean {
@@ -60,6 +91,9 @@ export class App {
     const shooter = this.game.current;
     if (shooter === 0) this.humanHasShot = true;
     this.stats.shots[shooter]++;
+    this.strikeAt = performance.now();
+    this.lastShotPower = shot.power;
+    audio.cue(shot.power);
     this.game.beginShot();
     strike(this.game.cue, shot);
     this.events = makeShotEvents();
@@ -74,6 +108,10 @@ export class App {
 
   /** Called from the main loop every frame. */
   update(dt: number): void {
+    if (this.sinkAnims.length) {
+      const now = performance.now();
+      this.sinkAnims = this.sinkAnims.filter((s) => now - s.start < 450);
+    }
     if (!this.simRunning) return;
     this.accumulator += Math.min(dt, 0.05);
     let moving = true;
@@ -105,9 +143,28 @@ export class App {
 
     if (out.gameOver) {
       ui.updateHud(this);
+      const won = out.winner === 0;
+      const gs = recordGame(
+        this.difficulty, won,
+        this.stats.potted[0], this.stats.fouls[0], this.stats.shots[0]
+      );
+      const d = gs.perDiff[this.difficulty];
+      const idx = DIFF_ORDER.indexOf(this.difficulty);
+      let suggest: Suggestion | null = null;
+      if (d.streak >= 3 && idx < DIFF_ORDER.length - 1) {
+        suggest = {
+          diff: DIFF_ORDER[idx + 1],
+          text: `${d.streak} wins in a row on ${cap(this.difficulty)} — ready for a tougher opponent?`,
+        };
+      } else if (d.streak <= -3 && idx > 0) {
+        suggest = {
+          diff: DIFF_ORDER[idx - 1],
+          text: `Tough run on ${cap(this.difficulty)} — want a friendlier table?`,
+        };
+      }
       this.after(900, () => {
         this.screen = 'result';
-        ui.showResult(this, out.winner!, out.reason, this.stats);
+        ui.showResult(this, out.winner!, out.reason, this.stats, suggest);
         this.humanBreaks = out.winner === 0; // winner breaks next game
       });
       return;

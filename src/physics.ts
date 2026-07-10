@@ -6,6 +6,13 @@ import {
 import { POCKETS } from './table';
 import { dist, len, rotate } from './math';
 
+/** Optional listeners for sound effects and animations. */
+export interface PhysicsHooks {
+  impact?: (kind: 'ball' | 'rail', speed: number) => void;
+  pot?: (ball: Ball, pocket: Vec) => void;
+}
+export const hooks: PhysicsHooks = {};
+
 export function makeShotEvents(): ShotEvents {
   return { firstContact: null, potted: [], cuePotted: false, railContacts: 0 };
 }
@@ -35,13 +42,27 @@ function nearPocketMouth(p: Vec): boolean {
   return POCKETS.some((pk) => dist(p, pk.pos) < pk.r + BALL_R * 0.5);
 }
 
-function pot(b: Ball, ev: ShotEvents): void {
+function pot(b: Ball, ev: ShotEvents, at: Vec): void {
   b.inPlay = false;
   b.vel = { x: 0, y: 0 };
   b.spinTop = 0;
   b.spinSide = 0;
   if (b.id === 0) ev.cuePotted = true;
   else ev.potted.push(b.id);
+  hooks.pot?.(b, at);
+}
+
+function nearestPocket(p: Vec): Vec {
+  let best = POCKETS[0].pos;
+  let bd = Infinity;
+  for (const pk of POCKETS) {
+    const d = dist(p, pk.pos);
+    if (d < bd) {
+      bd = d;
+      best = pk.pos;
+    }
+  }
+  return best;
 }
 
 /** Advance the world by dt. Returns true if anything is still moving. */
@@ -103,6 +124,8 @@ export function stepPhysics(balls: Ball[], dt: number, ev: ShotEvents): boolean 
       b.vel.x += nx * jimp;
       b.vel.y += ny * jimp;
 
+      hooks.impact?.('ball', Math.abs(rvn));
+
       if (cue && ev.firstContact === null) {
         ev.firstContact = cue === a ? b.id : a.id;
         // follow / draw: kick the cue ball along (or against) its old path
@@ -122,7 +145,7 @@ export function stepPhysics(balls: Ball[], dt: number, ev: ShotEvents): boolean 
     // capture
     for (const pk of POCKETS) {
       if (dist(b.pos, pk.pos) < pk.r * 0.88) {
-        pot(b, ev);
+        pot(b, ev, pk.pos);
         break;
       }
     }
@@ -150,6 +173,7 @@ export function stepPhysics(balls: Ball[], dt: number, ev: ShotEvents): boolean 
       }
       if (bounced) {
         ev.railContacts++;
+        hooks.impact?.('rail', len(b.vel));
         // side english bends the rebound
         if (b.id === 0 && Math.abs(b.spinSide) > 0.02) {
           b.vel = rotate(b.vel, b.spinSide * 0.3);
@@ -164,7 +188,7 @@ export function stepPhysics(balls: Ball[], dt: number, ev: ShotEvents): boolean 
         b.pos.x < -margin || b.pos.x > TABLE_W + margin ||
         b.pos.y < -margin || b.pos.y > TABLE_H + margin
       ) {
-        pot(b, ev);
+        pot(b, ev, nearestPocket(b.pos));
       }
     }
   }
