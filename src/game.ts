@@ -3,7 +3,9 @@ import { PHYSICS_DT } from './constants';
 import { EightBall } from './eightball';
 import { AI_LEVELS, chooseShot, chooseCuePlacement } from './ai';
 import { makeShotEvents, stepPhysics, strike, stopAll, hooks } from './physics';
-import { recordGame } from './storage';
+import { loadStats, recordGame } from './storage';
+import { unlockAchievements } from './achievements';
+import { currentUser, pushStats, recordCloudGame } from './cloud';
 import { audio } from './audio';
 import * as ui from './ui';
 
@@ -148,6 +150,19 @@ export class App {
         this.difficulty, won,
         this.stats.potted[0], this.stats.fouls[0], this.stats.shots[0]
       );
+      const unlocked = unlockAchievements(gs, {
+        won,
+        diff: this.difficulty,
+        potted: this.stats.potted[0],
+        fouls: this.stats.fouls[0],
+      });
+      if (currentUser) {
+        void recordCloudGame({
+          difficulty: this.difficulty, won,
+          potted: this.stats.potted[0], fouls: this.stats.fouls[0], shots: this.stats.shots[0],
+        });
+        void pushStats(loadStats());
+      }
       const d = gs.perDiff[this.difficulty];
       const idx = DIFF_ORDER.indexOf(this.difficulty);
       let suggest: Suggestion | null = null;
@@ -164,7 +179,7 @@ export class App {
       }
       this.after(900, () => {
         this.screen = 'result';
-        ui.showResult(this, out.winner!, out.reason, this.stats, suggest);
+        ui.showResult(this, out.winner!, out.reason, this.stats, suggest, unlocked);
         this.humanBreaks = out.winner === 0; // winner breaks next game
       });
       return;

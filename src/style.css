@@ -128,6 +128,55 @@ button { font-family: inherit; }
 #resStats b { font-size: 22px; display: block; margin-bottom: 2px; }
 #resReason { opacity: .75; margin-top: -12px; }
 #menuStats { font-size: 12px; opacity: .65; margin-top: -8px; }
+#menuAccount { font-size: 13px; opacity: .8; margin-top: -10px; }
+.ghost {
+  background: #ffffff12; color: #e8e4d8; border: 1px solid #ffffff2a;
+  padding: 10px 24px; border-radius: 12px; font-size: 14px; cursor: pointer;
+  margin-top: -8px;
+}
+
+/* ---- results: sign-in & achievements ---- */
+#resSave { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+#btnGoogle {
+  display: flex; align-items: center; gap: 10px;
+  background: #fff; color: #1f1f1f; font-weight: 600; font-size: 14px;
+  border: none; padding: 12px 20px; border-radius: 24px; cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,.4);
+}
+#resAch {
+  display: flex; flex-direction: column; gap: 6px; font-size: 14px;
+  background: rgba(255, 215, 94, .10); border: 1px solid rgba(255, 215, 94, .4);
+  padding: 10px 18px; border-radius: 12px;
+}
+
+/* ---- stats panel ---- */
+.overlay.scroll { justify-content: flex-start; overflow-y: auto; padding: 36px 20px 40px; gap: 16px; }
+#statsPanel h2 { font-size: 26px; }
+#statsPanel h3 { font-size: 15px; opacity: .8; margin-top: 10px; letter-spacing: 1px; text-transform: uppercase; }
+#statsPanel p { font-size: 13px; opacity: .75; max-width: 420px; }
+#statsTable, #lbList { display: flex; flex-direction: column; gap: 4px; width: min(440px, 92vw); }
+.statrow {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 14px; text-align: left;
+  background: #ffffff0d; padding: 8px 14px; border-radius: 10px; font-size: 14px;
+  align-items: center; font-variant-numeric: tabular-nums;
+}
+.statrow.head { background: transparent; font-size: 11px; opacity: .6; text-transform: uppercase; letter-spacing: 1px; padding: 2px 14px; }
+.statrow.total { border: 1px solid #ffffff26; font-weight: 600; }
+.lbnote { text-align: center; }
+#achGrid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px; width: min(560px, 92vw);
+}
+.ach {
+  background: #ffffff0d; border-radius: 12px; padding: 10px 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  opacity: .35; filter: grayscale(.8);
+}
+.ach.got { opacity: 1; filter: none; border: 1px solid rgba(255, 215, 94, .45); background: rgba(255, 215, 94, .08); }
+.aicon { font-size: 22px; }
+.aname { font-size: 12px; font-weight: 700; }
+.adesc { font-size: 10px; opacity: .65; text-align: center; }
+#btnSignOut { background: #ffffff1c; color: #e8e4d8; }
 #resSuggest {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center;
   background: rgba(255, 215, 94, .10); border: 1px solid rgba(255, 215, 94, .4);

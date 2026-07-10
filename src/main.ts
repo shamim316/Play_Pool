@@ -4,6 +4,7 @@ import { App } from './game';
 import { Renderer } from './render';
 import { setupInput } from './input';
 import { audio } from './audio';
+import { initAuth, signInWithGoogle, signOut, displayName } from './cloud';
 import * as ui from './ui';
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -44,6 +45,24 @@ btnSound.addEventListener('click', () => {
 });
 syncSoundIcon();
 window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
+
+document.getElementById('btnStats')!.addEventListener('click', () => ui.showStatsPanel());
+document.getElementById('btnCloseStats')!.addEventListener('click', () => {
+  document.getElementById('statsPanel')!.classList.add('hidden');
+});
+document.getElementById('btnGoogle')!.addEventListener('click', () => signInWithGoogle());
+document.getElementById('btnSignOut')!.addEventListener('click', () => {
+  void signOut().then(() => {
+    document.getElementById('statsPanel')!.classList.add('hidden');
+    if (app.screen === 'menu') ui.showMenu();
+    ui.toast('Signed out');
+  });
+});
+
+initAuth((user) => {
+  if (app.screen === 'menu') ui.showMenu();
+  if (user) ui.toast(`Signed in as ${displayName(user)} — progress saved ✓`, 3200);
+});
 
 ui.showMenu();
 

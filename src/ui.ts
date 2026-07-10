@@ -1,6 +1,8 @@
 import type { Difficulty, Group } from './types';
 import { BALL_COLORS } from './constants';
 import { loadStats, totalWins } from './storage';
+import { ACHIEVEMENTS, type AchievementDef } from './achievements';
+import { currentUser, displayName, fetchLeaderboard, isConfigured } from './cloud';
 import type { App, Suggestion } from './game';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -21,12 +23,17 @@ export function showMenu(): void {
   for (const id of ['hud', 'powerWrap', 'spinWidget', 'btnMenu', 'btnSound', 'toast']) {
     $(id).classList.add('hidden');
   }
+  $('statsPanel').classList.add('hidden');
   const s = loadStats();
   $('menuStats').textContent =
     s.games === 0
       ? ''
-      : `Your record on this device: ${s.games} game${s.games === 1 ? '' : 's'} · ` +
+      : `${currentUser ? 'Your record' : 'Your record on this device'}: ` +
+        `${s.games} game${s.games === 1 ? '' : 's'} · ` +
         `${totalWins(s)} won · best streak ${Math.max(0, s.bestStreak)}`;
+  $('menuAccount').textContent = currentUser
+    ? `Signed in as ${displayName()}`
+    : '';
 }
 
 export function syncDiffButtons(diff: Difficulty): void {
@@ -51,7 +58,8 @@ export function showResult(
   winner: 0 | 1,
   reason: string,
   stats: { potted: number[]; fouls: number[]; shots: number[] },
-  suggest: Suggestion | null = null
+  suggest: Suggestion | null = null,
+  unlocked: AchievementDef[] = []
 ): void {
   $('result').classList.remove('hidden');
   $('resTitle').textContent = winner === 0 ? '🏆 You win!' : 'Computer wins';
@@ -60,6 +68,29 @@ export function showResult(
     `<div><b>${stats.shots[0]}</b>Your shots</div>` +
     `<div><b>${stats.potted[0]}</b>Balls potted</div>` +
     `<div><b>${stats.fouls[0]}</b>Fouls</div>`;
+
+  const ach = $('resAch');
+  if (unlocked.length) {
+    ach.classList.remove('hidden');
+    ach.innerHTML = unlocked
+      .map((a) => `<div>${a.icon} <b>${a.name}</b> — ${a.desc}</div>`)
+      .join('');
+  } else {
+    ach.classList.add('hidden');
+  }
+
+  const note = $('resSaveNote');
+  const btnGoogle = $('btnGoogle');
+  if (!isConfigured()) {
+    btnGoogle.classList.add('hidden');
+    note.textContent = 'Playing as a guest — your progress is saved on this device.';
+  } else if (currentUser) {
+    btnGoogle.classList.add('hidden');
+    note.textContent = `✓ Progress saved to your account (${displayName()})`;
+  } else {
+    btnGoogle.classList.remove('hidden');
+    note.textContent = 'or keep playing as a guest — progress stays on this device';
+  }
 
   const box = $('resSuggest');
   if (suggest) {
@@ -72,6 +103,70 @@ export function showResult(
     box.classList.add('hidden');
   }
   void app;
+}
+
+const DIFF_LABELS: Record<Difficulty, string> = {
+  easy: 'Easy', medium: 'Medium', hard: 'Hard',
+};
+
+export function showStatsPanel(): void {
+  $('statsPanel').classList.remove('hidden');
+  const s = loadStats();
+
+  $('statsAccount').innerHTML = currentUser
+    ? `Signed in as <b>${escapeHtml(displayName())}</b>`
+    : isConfigured()
+      ? 'Playing as a guest — sign in at the end of any game to save your progress online.'
+      : 'Playing as a guest — progress is saved on this device.';
+  $('btnSignOut').classList.toggle('hidden', !currentUser);
+
+  const rows = (['easy', 'medium', 'hard'] as Difficulty[])
+    .map((d) => {
+      const r = s.perDiff[d];
+      return `<div class="statrow"><span>${DIFF_LABELS[d]}</span>` +
+        `<span>${r.wins} W – ${r.losses} L</span>` +
+        `<span>${r.streak > 0 ? `streak ${r.streak}` : ''}</span></div>`;
+    })
+    .join('');
+  $('statsTable').innerHTML =
+    `<div class="statrow head"><span>Difficulty</span><span>Record</span><span></span></div>` +
+    rows +
+    `<div class="statrow total"><span>Total</span>` +
+    `<span>${totalWins(s)} W – ${s.games - totalWins(s)} L</span>` +
+    `<span>${s.ballsPotted} balls potted</span></div>`;
+
+  $('achGrid').innerHTML = ACHIEVEMENTS.map((a) => {
+    const got = Boolean(s.achievements[a.id]);
+    return `<div class="ach ${got ? 'got' : ''}" title="${a.desc}">` +
+      `<span class="aicon">${a.icon}</span><span class="aname">${a.name}</span>` +
+      `<span class="adesc">${a.desc}</span></div>`;
+  }).join('');
+
+  const lb = $('lbList');
+  if (!isConfigured()) {
+    lb.innerHTML = '<p class="lbnote">The leaderboard appears once the game is online with accounts enabled.</p>';
+  } else {
+    lb.innerHTML = '<p class="lbnote">Loading…</p>';
+    void fetchLeaderboard().then((rows2) => {
+      if (!rows2) {
+        lb.innerHTML = '<p class="lbnote">Leaderboard unavailable right now.</p>';
+      } else if (rows2.length === 0) {
+        lb.innerHTML = '<p class="lbnote">No players yet — be the first to sign in and win!</p>';
+      } else {
+        lb.innerHTML = rows2
+          .map((r, i) =>
+            `<div class="statrow"><span>#${i + 1} ${escapeHtml(r.display_name ?? 'Player')}</span>` +
+            `<span>${r.wins} wins</span><span>${r.games} games</span></div>`)
+          .join('');
+      }
+    });
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!
+  );
 }
 
 function groupDots(app: App, g: Group | null): string {

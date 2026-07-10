@@ -20,6 +20,8 @@ export interface GuestStats {
   shots: number;
   bestStreak: number;
   perDiff: Record<Difficulty, DiffRecord>;
+  /** achievement id -> unlock timestamp (ms) */
+  achievements: Record<string, number>;
 }
 
 function empty(): GuestStats {
@@ -30,6 +32,7 @@ function empty(): GuestStats {
       medium: { wins: 0, losses: 0, streak: 0 },
       hard: { wins: 0, losses: 0, streak: 0 },
     },
+    achievements: {},
   };
 }
 
@@ -37,13 +40,26 @@ export function loadStats(): GuestStats {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as GuestStats;
-      return { ...empty(), ...parsed, perDiff: { ...empty().perDiff, ...parsed.perDiff } };
+      const parsed = JSON.parse(raw) as Partial<GuestStats>;
+      return {
+        ...empty(),
+        ...parsed,
+        perDiff: { ...empty().perDiff, ...parsed.perDiff },
+        achievements: parsed.achievements ?? {},
+      };
     }
   } catch {
     /* corrupted or blocked storage: start fresh */
   }
   return empty();
+}
+
+export function saveStats(s: GuestStats): void {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(s));
+  } catch {
+    /* private browsing etc. */
+  }
 }
 
 export function recordGame(
@@ -67,11 +83,7 @@ export function recordGame(
     d.streak = d.streak < 0 ? d.streak - 1 : -1;
   }
   if (d.streak > s.bestStreak) s.bestStreak = d.streak;
-  try {
-    localStorage.setItem(KEY, JSON.stringify(s));
-  } catch {
-    /* private browsing etc. — stats just aren't kept */
-  }
+  saveStats(s);
   return s;
 }
 
